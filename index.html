@@ -495,7 +495,17 @@ async function gasGet(action){
 }
 async function gasPost(data){
   if(!S.cfg.gas) return null;
-  return (await fetch(S.cfg.gas,{method:'POST',body:JSON.stringify(data),redirect:'follow'})).json();
+  // GAS Web App returns a 302 redirect; browsers convert POST→GET on 302, causing doGet to run
+  // instead of doPost. Fix: use mode:'no-cors' so the POST truly reaches doPost.
+  // Trade-off: opaque response (can't read body), so we synthesize the result locally.
+  await fetch(S.cfg.gas,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(data),
+    mode:'no-cors'
+  });
+  // Synthesize result since we can't read the opaque response
+  return {ok:true, added:(data.expenses||[]).length||(data.expense?1:0)};
 }
 
 // ↑ 推送：本機 → Sheets（GAS 會跳過已存在的 ID，不重複）
@@ -503,8 +513,8 @@ async function pushToSheets(){
   if(!S.cfg.gas){toast('尚未設定 Apps Script URL');return;}
   setSyncSt('syncing');
   try{
-    const r=await gasPost({action:'batchAddExpenses',expenses:S.exp});
-    setSyncSt('ok'); toast(`推送完成，新增 ${r?.added||0} 筆 ✓`);
+    await gasPost({action:'batchAddExpenses',expenses:S.exp});
+    setSyncSt('ok'); toast(`推送 ${S.exp.length} 筆至 Sheets（GAS 端會自動去重）✓`);
   }catch(e){setSyncSt('err');toast('推送失敗：'+e.message);}
 }
 // ↓ 同步：Sheets → 本機（LOCAL 優先：本機有的 ID 不被 Sheets 覆蓋）
