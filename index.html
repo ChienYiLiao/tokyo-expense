@@ -549,7 +549,7 @@ async function syncSheets(){
       const added=Object.keys(sheetsById).filter(k=>!localById[k]).length;
       S.exp=Object.values(merged).sort((a,b)=>String(b.id).localeCompare(String(a.id)));
       saveExp(); setSyncSt('ok'); renderAll();
-      toast(`同步完成，從 Sheets 新增 ${added} 筆 ✓`);
+      toast(`同步完成 (Sheets ${d.expenses.length} 筆，本地新增 ${added} 筆) ✓`);
     }else{setSyncSt('ok');toast('同步完成（Sheets 無資料）');}
   }catch(e){setSyncSt('err');toast('同步失敗：'+e.message);}
 }
