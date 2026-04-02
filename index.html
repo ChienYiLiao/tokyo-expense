@@ -87,7 +87,8 @@
     .md{width:100%;max-width:430px;margin:0 auto;background:var(--bg2);border-radius:24px 24px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));max-height:93vh;overflow-y:auto;transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);}
     .mo.open .md{transform:translateY(0);}
     .md-handle{width:36px;height:4px;background:var(--bg3);border-radius:2px;margin:0 auto 16px;}
-    .md-title{font-size:18px;font-weight:700;margin-bottom:18px;text-align:center;}
+    .md-title{font-size:18px;font-weight:700;margin-bottom:18px;text-align:center;position:relative;}
+    .md-close{position:absolute;right:-4px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px 8px;line-height:1;}
     .fg{margin-bottom:15px;}
     .flbl{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px;display:block;text-transform:uppercase;letter-spacing:.5px;}
     .fi{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;color:var(--text);font-size:15px;outline:none;transition:border-color .2s;-webkit-appearance:none;appearance:none;}
@@ -358,7 +359,7 @@
   <div class="mo" id="mo-add">
     <div class="md">
       <div class="md-handle"></div>
-      <div class="md-title">新增消費</div>
+      <div class="md-title">新增消費<button class="md-close" id="btn-close-modal">✕</button></div>
       <div class="fg">
         <label class="flbl">消費人</label>
         <div class="ps">
@@ -1045,6 +1046,7 @@ function bind(){
   document.querySelectorAll('.po').forEach(el=>el.addEventListener('click',()=>{S.ui.person=el.dataset.p;document.querySelectorAll('.po').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}));
   document.querySelectorAll('.cb').forEach(b=>b.addEventListener('click',()=>{S.ui.cur=b.dataset.cur;document.querySelectorAll('.cb').forEach(x=>x.classList.remove('active'));b.classList.add('active');}));
   document.getElementById('btn-submit').addEventListener('click',submitExp);
+  document.getElementById('btn-close-modal').addEventListener('click',closeModal);
   document.getElementById('inp-amt').addEventListener('keydown',e=>{if(e.key==='Enter')submitExp();});
   document.querySelectorAll('.fc').forEach(c=>c.addEventListener('click',()=>{S.ui.filter=c.dataset.f;document.querySelectorAll('.fc').forEach(x=>x.classList.remove('active'));c.classList.add('active');renderRec();}));
   document.getElementById('btn-save').addEventListener('click',saveSettings);
