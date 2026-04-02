@@ -508,6 +508,7 @@ async function gasPostBatch(action,expenses){
   const CHUNK=15; let totalAdded=0;
   for(let i=0;i<expenses.length;i+=CHUNK){
     const r=await gasPost({action,expenses:expenses.slice(i,i+CHUNK)});
+    if(r&&r.ok===false) throw new Error('GAS 錯誤：'+(r.error||'未知錯誤'));
     totalAdded+=(r?.added||0);
   }
   return {ok:true,added:totalAdded};
