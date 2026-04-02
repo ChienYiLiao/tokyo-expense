@@ -203,13 +203,9 @@
     </div>
     <div class="card">
       <div class="ctitle">預算進度</div>
-      <div class="prog-wrap">
-        <div class="prog-lbl"><span>旅程累計</span><span>NT$<span id="dash-total-twd">0</span> / <span id="dash-budget-lbl">--</span></span></div>
-        <div class="prog-bar"><div id="prog-total" class="prog-fill pf-ok" style="width:0%"></div></div>
-      </div>
       <div class="prog-wrap" style="margin-bottom:0">
-        <div class="prog-lbl"><span>現金 (日幣)</span><span>¥<span id="dash-cash-jpy">0</span> / <span id="dash-cash-lbl">--</span></span></div>
-        <div class="prog-bar"><div id="prog-cash" class="prog-fill pf-ok" style="width:0%"></div></div>
+        <div class="prog-lbl"><span>旅程累計</span><span>¥<span id="dash-total-jpy">0</span> / <span id="dash-budget-lbl">--</span></span></div>
+        <div class="prog-bar"><div id="prog-total" class="prog-fill pf-ok" style="width:0%"></div></div>
       </div>
     </div>
     <div class="prow">
@@ -306,8 +302,7 @@
     </div>
     <div class="ss">
       <div class="ss-title">預算設定</div>
-      <div class="sr"><div class="si">💰</div><div class="sinfo"><div class="sl">總預算 (台幣 NT$)</div></div><input type="number" class="sii" id="s-budget" placeholder="50000"></div>
-      <div class="sr"><div class="si">💴</div><div class="sinfo"><div class="sl">現金預算 (日幣 ¥)</div></div><input type="number" class="sii" id="s-cash" placeholder="50000"></div>
+      <div class="sr"><div class="si">💴</div><div class="sinfo"><div class="sl">旅程總預算 (日幣 ¥)</div><div class="sd">所有消費換算成日幣後與此比較</div></div><input type="number" class="sii" id="s-budget-jpy" placeholder="100000"></div>
     </div>
     <div class="ss">
       <div class="ss-title">人員設定（點頭像更換圖片）</div>
@@ -342,6 +337,8 @@
     <button class="btn btn-p" id="btn-save">儲存設定</button>
     <div style="height:8px"></div>
     <button class="btn btn-s" id="btn-export">📤 匯出 JSON 備份</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-s" id="btn-overwrite-sheets">🔄 覆蓋 Sheets（清除重複並重新推送）</button>
     <div style="height:8px"></div>
     <button class="btn btn-d" id="btn-clear">清除所有本機資料</button>
     <div style="height:20px"></div>
@@ -432,7 +429,7 @@ const CROP_SZ=280;
 // ── STATE ──────────────────────────────────────
 const S={
   exp:[],
-  cfg:{rate:.215,budget:0,cash:0,start:'',end:'',gemini:'',gas:'',me:'豬豬',wife:'小滾',me_avatar:'',wife_avatar:''},
+  cfg:{rate:.215,budget_jpy:0,start:'',end:'',gemini:'',gas:'',me:'豬豬',wife:'小滾',me_avatar:'',wife_avatar:''},
   ui:{page:'dashboard',person:'me',cat:'meal',cur:'JPY',pay:'cash',filter:'all'},
   charts:{daily:null,cat:null,pay:null},
   scanData:null,syncSt:'idle',
@@ -501,37 +498,42 @@ async function gasPost(data){
   return (await fetch(S.cfg.gas,{method:'POST',body:JSON.stringify(data),redirect:'follow'})).json();
 }
 
-// FIX: push (local→Sheets) vs pull/merge (Sheets→local, keeps new local entries)
+// ↑ 推送：本機 → Sheets（GAS 會跳過已存在的 ID，不重複）
 async function pushToSheets(){
   if(!S.cfg.gas){toast('尚未設定 Apps Script URL');return;}
   setSyncSt('syncing');
   try{
-    // Push all local expenses that may not be in Sheets
-    let ok=0;
-    for(const exp of S.exp){
-      try{await gasPost({action:'addExpense',expense:exp});ok++;}catch(_){}
-    }
-    setSyncSt('ok'); toast(`已推送 ${ok} 筆到 Sheets ✓`);
+    const r=await gasPost({action:'batchAddExpenses',expenses:S.exp});
+    setSyncSt('ok'); toast(`推送完成，新增 ${r?.added||0} 筆 ✓`);
   }catch(e){setSyncSt('err');toast('推送失敗：'+e.message);}
 }
+// ↓ 同步：Sheets → 本機（LOCAL 優先：本機有的 ID 不被 Sheets 覆蓋）
 async function syncSheets(){
   if(!S.cfg.gas){toast('尚未設定 Apps Script URL');return;}
   setSyncSt('syncing');
   try{
     const d=await gasGet('getExpenses');
     if(d&&d.expenses){
-      // MERGE: Sheets data + local entries not yet in Sheets
-      const normalized=d.expenses.map(ex=>({
-        ...ex,
-        date:safeDate(ex.date),
-        time:safeTime(ex.time),
-        jpy:Number(ex.jpy)||0,
-      })).filter(ex=>ex.date); // skip rows with no date
-      const sheetIds=new Set(normalized.map(e=>String(e.id)));
-      const localOnly=S.exp.filter(e=>!sheetIds.has(String(e.id)));
-      S.exp=[...normalized,...localOnly].sort((a,b)=>String(b.id).localeCompare(String(a.id)));
-      saveExp(); setSyncSt('ok'); renderAll(); toast(`已合併 ${normalized.length} 筆 ✓`);
-    }else{setSyncSt('ok');toast('同步完成（無資料）');}
+      // Normalize Sheets data
+      const fromSheets=d.expenses
+        .map(ex=>({...ex,date:safeDate(ex.date),time:safeTime(ex.time),jpy:Number(ex.jpy)||0}))
+        .filter(ex=>ex.date);
+      // Deduplicate Sheets data by ID (keep latest date for same ID)
+      const sheetsById={};
+      fromSheets.forEach(e=>{
+        const k=String(e.id);
+        if(!sheetsById[k]||e.date>sheetsById[k].date) sheetsById[k]=e;
+      });
+      // LOCAL WINS: for same ID, keep local record (it's more authoritative)
+      const localById={};
+      S.exp.forEach(e=>localById[String(e.id)]=e);
+      // Merge: start with Sheets, overwrite with local
+      const merged={...sheetsById,...localById};
+      const added=Object.keys(sheetsById).filter(k=>!localById[k]).length;
+      S.exp=Object.values(merged).sort((a,b)=>String(b.id).localeCompare(String(a.id)));
+      saveExp(); setSyncSt('ok'); renderAll();
+      toast(`同步完成，從 Sheets 新增 ${added} 筆 ✓`);
+    }else{setSyncSt('ok');toast('同步完成（Sheets 無資料）');}
   }catch(e){setSyncSt('err');toast('同步失敗：'+e.message);}
 }
 async function pushExp(exp){try{await gasPost({action:'addExpense',expense:exp});}catch(_){}}
@@ -552,31 +554,39 @@ async function scanReceipt(b64,mime){
 {"merchant":"店名繁體中文","total":總金額數字,"currency":"JPY","tax_type":"稅別","items":[{"name":"品項繁體中文","price":價格,"qty":數量}],"category_hint":"meal"}
 category_hint 只能是：ticket/transit/meal/snack/drink/souvenir/jacket/shoes/tops/pants/proxy/gift/flight/hotel/other
 無法辨識的欄位用null，所有文字務必繁體中文，只回傳JSON不要其他文字。`;
-  // Try gemini-2.0-flash first, fallback to 1.5-flash
-  for(const model of['gemini-2.0-flash','gemini-1.5-flash']){
+  // Models to try in order (free-tier compatible)
+  const models=['gemini-flash-latest','gemini-1.5-flash-latest','gemini-2.0-flash','gemini-1.5-flash'];
+  const errs=[];
+  for(const model of models){
     const ep=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`;
-    const res=await fetch(ep,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}],
-        generationConfig:{temperature:0.1,maxOutputTokens:1024}
-      })
-    });
+    let res;
+    try{ res=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:1024}})}); }
+    catch(fe){ errs.push(`[${model}] 網路錯誤: ${fe.message}`); continue; }
+
+    const body=await res.json();
     if(!res.ok){
-      const err=await res.json();
-      const msg=err.error?.message||'';
-      // If model not available, try next
-      if(msg.includes('not found')||msg.includes('deprecated')||msg.includes('no longer')||msg.includes('404')) continue;
-      throw new Error(`[${model}] ${msg}`);
+      const code=body.error?.code||res.status;
+      const msg=body.error?.message||'';
+      // API Key invalid or no permission → fail immediately (no point trying other models)
+      if(res.status===400&&msg.includes('API_KEY_INVALID')) throw new Error('API Key 無效，請在 Google AI Studio 重新取得。');
+      if(res.status===403) throw new Error(`API Key 無存取權限 (403)。請確認：\n1. aistudio.google.com 中 API Key 狀態正常\n2. 已啟用「Generative Language API」\n錯誤：${msg}`);
+      if(res.status===429) throw new Error('API 配額已達上限 (429)，請稍後再試。');
+      // Model not found → try next model
+      if(res.status===404||msg.toLowerCase().includes('not found')||msg.includes('deprecated')||msg.includes('no longer')){
+        errs.push(`[${model}] 模型不可用: ${msg.slice(0,80)}`); continue;
+      }
+      // Other errors → try next but record
+      errs.push(`[${model}] HTTP ${code}: ${msg.slice(0,100)}`); continue;
     }
-    const d=await res.json();
-    if(!d.candidates?.length) throw new Error('Gemini 回應為空，請確認 API Key 是否有 Vision 權限');
-    const raw=d.candidates[0].content?.parts?.[0]?.text||'';
+    if(!body.candidates?.length){
+      errs.push(`[${model}] 回應為空（可能圖片過大或格式不支援）`); continue;
+    }
+    const raw=body.candidates[0].content?.parts?.[0]?.text||'';
     const cleaned=raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
-    try{return JSON.parse(cleaned);}
-    catch(je){throw new Error('JSON 解析失敗：'+raw.slice(0,120));}
+    try{ return JSON.parse(cleaned); }
+    catch(_){ throw new Error(`[${model}] JSON 解析失敗。AI 原始回應：\n${raw.slice(0,200)}`); }
   }
-  throw new Error('所有 Gemini 模型均不可用。請確認 API Key 是否有效，並在 Google AI Studio 確認已啟用 Gemini API。');
+  throw new Error('所有模型均不可用。嘗試紀錄：\n'+errs.join('\n'));
 }
 
 // ── AVATAR HELPERS ─────────────────────────────
@@ -697,19 +707,16 @@ function renderAll(){renderDash();renderRec();renderCfg();if(S.ui.page==='stats'
 
 function renderDash(){
   const te=todayExp(),tj=te.reduce((s,e)=>s+(Number(e.jpy)||0),0);
-  const totJ=totalJpy(),totT=r2t(totJ),cshJ=cashJpy();
-  const{budget,cash,start,end,me,wife}=S.cfg,t=today();
+  const totJ=totalJpy();
+  const{budget_jpy,start,end,me,wife}=S.cfg,t=today();
   document.getElementById('dash-today-lbl').textContent=`今日 · ${fmtDate(t)}`;
   if(start&&end) document.getElementById('dash-range').textContent=`${start} ～ ${end}`;
   document.getElementById('dash-today-jpy').textContent=fmt(tj);
   document.getElementById('dash-today-twd').textContent=fmt(r2t(tj));
-  document.getElementById('dash-total-twd').textContent=fmt(totT);
-  document.getElementById('dash-budget-lbl').textContent=budget?`NT$${fmt(budget)}`:'--';
-  document.getElementById('dash-cash-jpy').textContent=fmt(cshJ);
-  document.getElementById('dash-cash-lbl').textContent=cash?`¥${fmt(cash)}`:'--';
+  document.getElementById('dash-total-jpy').textContent=fmt(totJ);
+  document.getElementById('dash-budget-lbl').textContent=budget_jpy?`¥${fmt(budget_jpy)}`:'--';
   function setProg(id,pct){const el=document.getElementById(id);el.style.width=Math.min(pct,100)+'%';el.className='prog-fill '+(pct<60?'pf-ok':pct<85?'pf-warn':'pf-danger');}
-  if(budget) setProg('prog-total',(totT/budget)*100);
-  if(cash)   setProg('prog-cash', (cshJ/cash)*100);
+  if(budget_jpy) setProg('prog-total',(totJ/budget_jpy)*100);
   const mn=me||'豬豬',wn=wife||'小滾';
   ['me-lbl','mo-me-lbl'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=mn;});
   ['wife-lbl','mo-wife-lbl'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=wn;});
@@ -827,7 +834,7 @@ function renderCfg(){
   const c=S.cfg;
   const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   sv('s-start',c.start);sv('s-end',c.end);sv('s-rate',c.rate);
-  sv('s-budget',c.budget);sv('s-cash',c.cash);
+  sv('s-budget-jpy',c.budget_jpy);
   sv('s-gemini',c.gemini);sv('s-gas',c.gas);
   sv('s-me',c.me);sv('s-wife',c.wife);
   setSyncSt(c.gas?S.syncSt:'idle');
@@ -974,15 +981,14 @@ function toast(msg){
 function saveSettings(){
   S.cfg={
     ...S.cfg, // keep avatar data
-    rate:  parseFloat(document.getElementById('s-rate').value)||.215,
-    budget:parseFloat(document.getElementById('s-budget').value)||0,
-    cash:  parseFloat(document.getElementById('s-cash').value)||0,
-    start: document.getElementById('s-start').value,
-    end:   document.getElementById('s-end').value,
-    gemini:document.getElementById('s-gemini').value.trim(),
-    gas:   document.getElementById('s-gas').value.trim(),
-    me:    document.getElementById('s-me').value.trim()||'豬豬',
-    wife:  document.getElementById('s-wife').value.trim()||'小滾',
+    rate:       parseFloat(document.getElementById('s-rate').value)||.215,
+    budget_jpy: parseFloat(document.getElementById('s-budget-jpy').value)||0,
+    start:  document.getElementById('s-start').value,
+    end:    document.getElementById('s-end').value,
+    gemini: document.getElementById('s-gemini').value.trim(),
+    gas:    document.getElementById('s-gas').value.trim(),
+    me:     document.getElementById('s-me').value.trim()||'豬豬',
+    wife:   document.getElementById('s-wife').value.trim()||'小滾',
   };
   saveCfg(); renderAll(); toast('設定已儲存 ✓');
 }
@@ -1006,6 +1012,15 @@ function bind(){
   document.getElementById('btn-save').addEventListener('click',saveSettings);
   document.getElementById('btn-sync').addEventListener('click',syncSheets);
   document.getElementById('btn-push').addEventListener('click',pushToSheets);
+  document.getElementById('btn-overwrite-sheets').addEventListener('click',async()=>{
+    if(!S.cfg.gas){toast('尚未設定 Apps Script URL');return;}
+    if(!confirm('這會清除 Google Sheets 中的所有記錄，並將本機資料重新推送。\n確定繼續？')) return;
+    setSyncSt('syncing');
+    try{
+      await gasPost({action:'clearAndRebuild',expenses:S.exp});
+      setSyncSt('ok'); toast(`已重建 Sheets，共 ${S.exp.length} 筆 ✓`);
+    }catch(e){setSyncSt('err');toast('失敗：'+e.message);}
+  });
   document.getElementById('btn-export').addEventListener('click',exportJSON);
   document.getElementById('btn-clear').addEventListener('click',()=>{
     if(confirm('確定清除所有本機資料？此操作無法復原。')){localStorage.removeItem('tk_exp');S.exp=[];renderAll();toast('已清除');}
