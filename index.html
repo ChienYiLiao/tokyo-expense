@@ -560,7 +560,7 @@ category_hint 只能是：ticket/transit/meal/snack/drink/souvenir/jacket/shoes/
   for(const model of models){
     const ep=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`;
     let res;
-    try{ res=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:1024}})}); }
+    try{ res=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:4096}})}); }
     catch(fe){ errs.push(`[${model}] 網路錯誤: ${fe.message}`); continue; }
 
     const body=await res.json();
@@ -584,7 +584,27 @@ category_hint 只能是：ticket/transit/meal/snack/drink/souvenir/jacket/shoes/
     const raw=body.candidates[0].content?.parts?.[0]?.text||'';
     const cleaned=raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
     try{ return JSON.parse(cleaned); }
-    catch(_){ throw new Error(`[${model}] JSON 解析失敗。AI 原始回應：\n${raw.slice(0,200)}`); }
+    catch(_){
+      // Truncation recovery: try to extract core fields even if items array is cut off
+      try{
+        const merchant=(cleaned.match(/"merchant"\s*:\s*"([^"]*)"/))||[];
+        const total=(cleaned.match(/"total"\s*:\s*(\d+)/))||[];
+        const taxType=(cleaned.match(/"tax_type"\s*:\s*"([^"]*)"/))||[];
+        const catHint=(cleaned.match(/"category_hint"\s*:\s*"([^"]*)"/))||[];
+        if(total[1]){
+          return{
+            merchant:merchant[1]||null,
+            total:Number(total[1]),
+            currency:'JPY',
+            tax_type:taxType[1]||null,
+            items:[],
+            category_hint:catHint[1]||'other',
+            _truncated:true
+          };
+        }
+      }catch(_2){}
+      throw new Error(`[${model}] JSON 解析失敗。AI 原始回應：\n${raw.slice(0,200)}`);
+    }
   }
   throw new Error('所有模型均不可用。嘗試紀錄：\n'+errs.join('\n'));
 }
@@ -949,12 +969,14 @@ async function doScan(file){
   reader.readAsDataURL(file);
 }
 function renderScanResult(d){
-  const items=d.items?.map(i=>`${i.name} × ${i.qty||1}  ¥${i.price||0}`).join('<br>')||'--';
+  const items=d.items?.length?d.items.map(i=>`${i.name} × ${i.qty||1}  ¥${i.price||0}`).join('<br>'):'--';
+  const truncNote=d._truncated?`<div style="font-size:11px;color:var(--warning);margin-top:6px">⚠️ 品項因回應過長被略過，金額與店名已擷取</div>`:'';
   document.getElementById('air-content').innerHTML=`
     <div class="aii"><span class="ak">店名</span><span class="av2">${d.merchant||'--'}</span></div>
     <div class="aii"><span class="ak">總金額</span><span class="av2">¥${d.total||0}</span></div>
     <div class="aii"><span class="ak">稅別</span><span class="av2">${d.tax_type||'--'}</span></div>
-    <div class="aii"><span class="ak">品項</span><span class="av2">${items}</span></div>`;
+    <div class="aii"><span class="ak">品項</span><span class="av2">${items}</span></div>
+    ${truncNote}`;
 }
 
 // ── NAVIGATION ─────────────────────────────────
