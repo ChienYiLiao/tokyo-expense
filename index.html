@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0d0d1a">
+  <title>🗼 東京記帳</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:           #0d0d1a;
+      --bg2:          #13132a;
+      --bg3:          #1c1c35;
+      --card:         #171730;
+      --primary:      #ff6b9d;
+      --primary-dk:   #c44569;
+      --secondary:    #f8a5c2;
+      --text:         #e8e8f2;
+      --muted:        #7777aa;
+      --success:      #6bcb77;
+      --warning:      #ffd166;
+      --danger:       #ff6b6b;
+      --border:       rgba(255,107,157,0.18);
+      --shadow:       0 4px 24px rgba(0,0,0,0.45);
+      --r:            16px;
+      --r-sm:         10px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      font-family:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;
+      background:var(--bg);color:var(--text);
+      overflow-x:hidden;-webkit-tap-highlight-color:transparent;
+    }
+    #app{max-width:430px;margin:0 auto;min-height:100%;position:relative;padding-bottom:80px;}
+
+    /* ── Pages ── */
+    .page{display:none;padding:0 14px;animation:fadeUp .22s ease;}
+    .page.active{display:block;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── Page Header ── */
+    .ph{
+      position:sticky;top:0;background:var(--bg);
+      padding:14px 14px 10px;margin:0 -14px 14px;
+      border-bottom:1px solid var(--border);z-index:20;
+    }
+    .ph h1{
+      font-size:22px;font-weight:800;
+      background:linear-gradient(135deg,var(--primary),var(--secondary));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    }
+    .ph .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+
+    /* ── Bottom Nav ── */
+    #bnav{
+      position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+      width:100%;max-width:430px;
+      background:rgba(19,19,42,0.95);border-top:1px solid var(--border);
+      display:flex;padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+      z-index:100;backdrop-filter:blur(20px);
+    }
+    .ni{
+      flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+      padding:4px 0;cursor:pointer;border:none;background:none;color:var(--muted);
+      transition:color .2s;
+    }
+    .ni.active{color:var(--primary);}
+    .ni .nico{font-size:22px;line-height:1;}
+    .ni .nlbl{font-size:10px;font-weight:600;}
+
+    /* ── Card ── */
+    .card{
+      background:var(--card);border-radius:var(--r);padding:16px;
+      margin-bottom:12px;border:1px solid var(--border);box-shadow:var(--shadow);
+    }
+    .ctitle{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;}
+
+    /* ── Dashboard Hero ── */
+    .hero{
+      background:linear-gradient(135deg,#16082e,#2a1550);
+      border-radius:var(--r);padding:20px;margin-bottom:12px;
+      border:1px solid rgba(255,107,157,.3);position:relative;overflow:hidden;
+    }
+    .hero::before{content:'🗼';position:absolute;right:-8px;bottom:-8px;font-size:88px;opacity:.07;}
+    .hero-date{font-size:12px;color:var(--secondary);margin-bottom:4px;}
+    .hero-jpy{font-size:38px;font-weight:800;color:#fff;line-height:1;}
+    .hero-jpy .cur{font-size:16px;font-weight:400;color:var(--secondary);margin-left:4px;}
+    .hero-twd{font-size:14px;color:var(--muted);margin-top:4px;}
+
+    /* ── Stat Cards ── */
+    .srow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+    .scard{background:var(--card);border-radius:var(--r-sm);padding:14px;border:1px solid var(--border);}
+    .slbl{font-size:11px;color:var(--muted);margin-bottom:4px;}
+    .sval{font-size:20px;font-weight:700;}
+    .sval .unit{font-size:11px;font-weight:400;color:var(--muted);}
+
+    /* ── Progress ── */
+    .prog-wrap{margin-bottom:12px;}
+    .prog-lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:5px;}
+    .prog-bar{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+    .prog-fill{height:100%;border-radius:4px;transition:width .5s ease;}
+    .pf-ok{background:linear-gradient(90deg,var(--success),#4ecdc4);}
+    .pf-warn{background:linear-gradient(90deg,var(--warning),#ff9f43);}
+    .pf-danger{background:linear-gradient(90deg,var(--danger),var(--primary));}
+
+    /* ── Person Cards ── */
+    .prow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+    .pcard{background:var(--card);border-radius:var(--r-sm);padding:14px;border:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+    .av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+    .av.me{background:linear-gradient(135deg,#667eea,#764ba2);}
+    .av.wife{background:linear-gradient(135deg,#f093fb,#f5576c);}
+    .pinfo .pname{font-size:13px;font-weight:600;}
+    .pinfo .pamt{font-size:17px;font-weight:700;color:var(--primary);}
+
+    /* ── Expense Item ── */
+    .ei{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+    .ei:last-child{border-bottom:none;}
+    .ei:active{opacity:.7;}
+    .ei-icon{width:40px;height:40px;border-radius:var(--r-sm);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+    .ei-info{flex:1;min-width:0;}
+    .ei-merchant{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ei-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+    .ei-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
+    .ei-av.me{background:linear-gradient(135deg,#667eea,#764ba2);}
+    .ei-av.wife{background:linear-gradient(135deg,#f093fb,#f5576c);}
+    .ei-amt{text-align:right;flex-shrink:0;}
+    .ei-jpy{font-size:15px;font-weight:700;}
+    .ei-twd{font-size:11px;color:var(--muted);}
+
+    /* ── FAB ── */
+    #fab{
+      position:fixed;bottom:90px;right:calc(50% - 215px + 14px);
+      width:56px;height:56px;border-radius:50%;
+      background:linear-gradient(135deg,var(--primary),var(--primary-dk));
+      border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      font-size:30px;line-height:1;color:#fff;
+      box-shadow:0 4px 20px rgba(255,107,157,.55);z-index:99;transition:transform .2s;
+    }
+    #fab:active{transform:scale(.9);}
+    @media(max-width:430px){#fab{right:14px;}}
+
+    /* ── Modal ── */
+    .mo{
+      position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;
+      display:flex;align-items:flex-end;
+      opacity:0;pointer-events:none;transition:opacity .3s;backdrop-filter:blur(5px);
+    }
+    .mo.open{opacity:1;pointer-events:all;}
+    .md{
+      width:100%;max-width:430px;margin:0 auto;
+      background:var(--bg2);border-radius:24px 24px 0 0;
+      padding:18px 18px calc(20px + env(safe-area-inset-bottom));
+      max-height:93vh;overflow-y:auto;
+      transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);
+    }
+    .mo.open .md{transform:translateY(0);}
+    .md-handle{width:36px;height:4px;background:var(--bg3);border-radius:2px;margin:0 auto 16px;}
+    .md-title{font-size:18px;font-weight:700;margin-bottom:18px;text-align:center;}
+
+    /* ── Form ── */
+    .fg{margin-bottom:15px;}
+    .flbl{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px;display:block;text-transform:uppercase;letter-spacing:.5px;}
+    .fi{
+      width:100%;background:var(--bg3);border:1px solid var(--border);
+      border-radius:var(--r-sm);padding:12px 14px;color:var(--text);font-size:15px;outline:none;
+      transition:border-color .2s;-webkit-appearance:none;
+    }
+    .fi:focus{border-color:var(--primary);}
+    textarea.fi{resize:none;height:72px;}
+
+    /* person selector */
+    .ps{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .po{
+      background:var(--bg3);border:2px solid transparent;border-radius:var(--r-sm);
+      padding:12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all .2s;
+    }
+    .po.sel{border-color:var(--primary);background:rgba(255,107,157,.1);}
+    .po .av{width:32px;height:32px;font-size:16px;}
+    .po .pn{font-size:14px;font-weight:600;}
+
+    /* category grid */
+    .cg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;}
+    .co{
+      background:var(--bg3);border:2px solid transparent;border-radius:var(--r-sm);
+      padding:9px 3px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:all .2s;
+    }
+    .co.sel{border-color:var(--primary);background:rgba(255,107,157,.1);}
+    .co .ci{font-size:22px;}
+    .co .cl{font-size:9px;color:var(--muted);text-align:center;line-height:1.2;}
+    .co.sel .cl{color:var(--primary);}
+
+    /* amount */
+    .aw{display:flex;gap:8px;}
+    .ct{display:flex;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);flex-shrink:0;}
+    .cb{padding:12px 12px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;}
+    .cb.active{background:var(--primary);color:#fff;}
+
+    /* payment */
+    .pg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .pp{
+      background:var(--bg3);border:2px solid transparent;border-radius:var(--r-sm);
+      padding:10px 12px;display:flex;align-items:center;gap:7px;cursor:pointer;transition:all .2s;font-size:13px;
+    }
+    .pp.sel{border-color:var(--primary);background:rgba(255,107,157,.1);color:var(--primary);}
+
+    /* ── Buttons ── */
+    .btn{width:100%;padding:14px;border:none;border-radius:var(--r-sm);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s;}
+    .btn-p{background:linear-gradient(135deg,var(--primary),var(--primary-dk));color:#fff;box-shadow:0 4px 16px rgba(255,107,157,.4);}
+    .btn-p:active{transform:scale(.97);}
+    .btn-s{background:var(--bg3);color:var(--text);border:1px solid var(--border);}
+    .btn-d{background:rgba(255,107,107,.12);color:var(--danger);border:1px solid rgba(255,107,107,.25);}
+
+    /* ── Filter ── */
+    .fbar{display:flex;gap:7px;margin-bottom:12px;overflow-x:auto;padding-bottom:3px;scrollbar-width:none;}
+    .fbar::-webkit-scrollbar{display:none;}
+    .fc{flex-shrink:0;padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);font-size:12px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+    .fc.active{background:var(--primary);border-color:var(--primary);color:#fff;}
+
+    /* ── Date Group ── */
+    .dgh{font-size:12px;color:var(--muted);font-weight:700;padding:8px 0 4px;display:flex;justify-content:space-between;}
+
+    /* ── Scanner ── */
+    .scan-zone{
+      border:2px dashed var(--border);border-radius:var(--r);padding:36px 20px;
+      text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;
+    }
+    .scan-zone:hover,.scan-zone.dv{border-color:var(--primary);background:rgba(255,107,157,.04);}
+    .scan-zone .sz-ico{font-size:56px;margin-bottom:10px;}
+    .scan-zone h3{font-size:16px;margin-bottom:5px;}
+    .scan-zone p{font-size:13px;color:var(--muted);}
+    #scan-img{width:100%;border-radius:var(--r-sm);margin-bottom:12px;display:none;}
+    .air{background:var(--bg3);border-radius:var(--r-sm);padding:12px;border:1px solid var(--border);margin-bottom:12px;}
+    .aii{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
+    .aii:last-child{border-bottom:none;}
+    .aii .ak{color:var(--muted);}
+    .aii .av2{font-weight:600;text-align:right;max-width:200px;}
+    .spin{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .8s linear infinite;}
+    @keyframes sp{to{transform:rotate(360deg)}}
+
+    /* ── Charts ── */
+    .ch{position:relative;height:200px;margin-bottom:8px;}
+    .ch-tall{position:relative;height:240px;margin-bottom:8px;}
+    .t10-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+    .t10-item:last-child{border-bottom:none;}
+    .t10-rank{width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+    .t10-rank.gold{background:#ffd700;color:#333;}
+    .t10-rank.silver{background:#c0c0c0;color:#333;}
+    .t10-rank.bronze{background:#cd7f32;color:#fff;}
+
+    /* ── Settings ── */
+    .ss{margin-bottom:20px;}
+    .ss-title{font-size:11px;color:var(--primary);font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;padding-left:4px;}
+    .sr{background:var(--card);border-radius:var(--r-sm);padding:14px;display:flex;align-items:center;gap:12px;border:1px solid var(--border);margin-bottom:8px;}
+    .si{font-size:22px;flex-shrink:0;}
+    .sinfo{flex:1;}
+    .sinfo .sl{font-size:14px;font-weight:600;}
+    .sinfo .sd{font-size:11px;color:var(--muted);margin-top:2px;}
+    .sii{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:14px;width:110px;text-align:right;outline:none;}
+    .sii:focus{border-color:var(--primary);}
+
+    /* ── Sync badge ── */
+    .sbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:10px;background:rgba(255,209,102,.15);color:var(--warning);}
+    .sbadge.ok{background:rgba(107,203,119,.15);color:var(--success);}
+    .sbadge.err{background:rgba(255,107,107,.15);color:var(--danger);}
+
+    /* ── Toast ── */
+    #toast{
+      position:fixed;top:18px;left:50%;
+      transform:translateX(-50%) translateY(-80px);
+      background:var(--card);color:var(--text);padding:11px 20px;border-radius:20px;
+      font-size:14px;z-index:999;transition:transform .3s cubic-bezier(.32,.72,0,1);
+      white-space:nowrap;border:1px solid var(--border);box-shadow:var(--shadow);
+    }
+    #toast.show{transform:translateX(-50%) translateY(0);}
+
+    /* ── Empty state ── */
+    .empty{text-align:center;padding:36px 20px;color:var(--muted);}
+    .empty .eico{font-size:44px;margin-bottom:10px;}
+    .empty p{font-size:14px;line-height:1.6;}
+
+    /* ── Badge ── */
+    .badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;}
+    .b-cash{background:rgba(107,203,119,.2);color:var(--success);}
+    .b-card{background:rgba(102,126,234,.2);color:#667eea;}
+    .b-ic{background:rgba(255,159,67,.2);color:#ff9f43;}
+    .b-epay{background:rgba(240,147,251,.2);color:#f093fb;}
+
+    /* ── Warn box ── */
+    .warn-box{background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);border-radius:var(--r-sm);padding:12px 14px;font-size:13px;color:var(--warning);margin-bottom:12px;display:none;}
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════════════ DASHBOARD ═══════════════ -->
+  <section class="page active" id="page-dashboard">
+    <div class="ph">
+      <h1>🗼 東京記帳</h1>
+      <div class="sub" id="dash-range">設定旅程日期中...</div>
+    </div>
+
+    <div class="hero">
+      <div class="hero-date" id="dash-today-lbl">今日</div>
+      <div class="hero-jpy"><span id="dash-today-jpy">0</span><span class="cur">¥</span></div>
+      <div class="hero-twd">≈ NT$ <span id="dash-today-twd">0</span></div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">預算進度</div>
+      <div class="prog-wrap">
+        <div class="prog-lbl">
+          <span>旅程累計</span>
+          <span>NT$<span id="dash-total-twd">0</span> / <span id="dash-budget-lbl">--</span></span>
+        </div>
+        <div class="prog-bar"><div id="prog-total" class="prog-fill pf-ok" style="width:0%"></div></div>
+      </div>
+      <div class="prog-wrap" style="margin-bottom:0">
+        <div class="prog-lbl">
+          <span>現金 (日幣)</span>
+          <span>¥<span id="dash-cash-jpy">0</span> / <span id="dash-cash-lbl">--</span></span>
+        </div>
+        <div class="prog-bar"><div id="prog-cash" class="prog-fill pf-ok" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="prow">
+      <div class="pcard">
+        <div class="av me">👨</div>
+        <div class="pinfo"><div class="pname" id="me-lbl">我</div><div class="pamt">¥<span id="me-tot">0</span></div></div>
+      </div>
+      <div class="pcard">
+        <div class="av wife">👩</div>
+        <div class="pinfo"><div class="pname" id="wife-lbl">老婆</div><div class="pamt">¥<span id="wife-tot">0</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">最近消費</div>
+      <div id="recent-list">
+        <div class="empty"><div class="eico">🌸</div><p>還沒有消費記錄<br>點擊 + 新增第一筆！</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ RECORDS ═══════════════ -->
+  <section class="page" id="page-records">
+    <div class="ph"><h1>消費記錄</h1></div>
+    <div class="fbar" id="rec-filter">
+      <div class="fc active" data-f="all">全部</div>
+      <div class="fc" data-f="me">👨 我</div>
+      <div class="fc" data-f="wife">👩 老婆</div>
+      <div class="fc" data-f="cash">💴 現金</div>
+      <div class="fc" data-f="card">💳 刷卡</div>
+    </div>
+    <div id="records-list">
+      <div class="empty"><div class="eico">📋</div><p>目前沒有記錄</p></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SCANNER ═══════════════ -->
+  <section class="page" id="page-scanner">
+    <div class="ph"><h1>掃描收據</h1><div class="sub">Gemini AI 辨識日文收據</div></div>
+    <input type="file" id="scan-input" accept="image/*" capture="environment" style="display:none">
+    <div class="scan-zone" id="scan-zone">
+      <div class="sz-ico">📷</div>
+      <h3>拍照或上傳收據</h3>
+      <p>支援 JPG、PNG、HEIC<br>AI 自動擷取店名、金額、品項</p>
+    </div>
+    <img id="scan-img" alt="收據預覽">
+    <div id="scan-loading" style="display:none;text-align:center;padding:28px 0;">
+      <div class="spin"></div>
+      <p style="margin-top:12px;color:var(--muted);font-size:14px;">Gemini AI 辨識中...</p>
+    </div>
+    <div id="scan-result" style="display:none;">
+      <div class="ctitle" style="margin-bottom:7px;">AI 辨識結果</div>
+      <div class="air" id="air-content"></div>
+      <button class="btn btn-p" id="btn-use-result">✓ 使用此結果新增記帳</button>
+      <button class="btn btn-s" style="margin-top:8px" id="btn-rescan">重新掃描</button>
+    </div>
+    <div class="warn-box" id="scan-warn">⚠️ 請先在「設定」頁面填入 Gemini API Key 才能使用 AI 辨識功能</div>
+  </section>
+
+  <!-- ═══════════════ STATS ═══════════════ -->
+  <section class="page" id="page-stats">
+    <div class="ph"><h1>統計分析</h1></div>
+    <div class="card">
+      <div class="ctitle">每日消費趨勢</div>
+      <div class="ch-tall"><canvas id="chart-daily"></canvas></div>
+    </div>
+    <div class="srow">
+      <div class="card" style="margin-bottom:0">
+        <div class="ctitle">類別占比</div>
+        <div class="ch"><canvas id="chart-cat"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="ctitle">支付方式</div>
+        <div class="ch"><canvas id="chart-pay"></canvas></div>
+      </div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="card">
+      <div class="ctitle">Top 10 消費</div>
+      <div id="top10"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SETTINGS ═══════════════ -->
+  <section class="page" id="page-settings">
+    <div class="ph"><h1>設定</h1></div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="ctitle">同步狀態</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span id="sync-badge" class="sbadge">● 未連線</span>
+        <button class="btn btn-s" style="width:auto;padding:8px 16px;font-size:13px" id="btn-sync">立即同步</button>
+      </div>
+    </div>
+
+    <div class="ss">
+      <div class="ss-title">旅程設定</div>
+      <div class="sr">
+        <div class="si">📅</div><div class="sinfo"><div class="sl">出發日期</div></div>
+        <input type="date" class="sii" id="s-start" style="width:130px">
+      </div>
+      <div class="sr">
+        <div class="si">🏠</div><div class="sinfo"><div class="sl">回國日期</div></div>
+        <input type="date" class="sii" id="s-end" style="width:130px">
+      </div>
+      <div class="sr">
+        <div class="si">💱</div>
+        <div class="sinfo"><div class="sl">日幣匯率</div><div class="sd">1 JPY = ? TWD</div></div>
+        <input type="number" class="sii" id="s-rate" placeholder="0.215" step="0.001">
+      </div>
+    </div>
+
+    <div class="ss">
+      <div class="ss-title">預算設定</div>
+      <div class="sr">
+        <div class="si">💰</div><div class="sinfo"><div class="sl">總預算 (台幣 NT$)</div></div>
+        <input type="number" class="sii" id="s-budget" placeholder="50000">
+      </div>
+      <div class="sr">
+        <div class="si">💴</div><div class="sinfo"><div class="sl">現金預算 (日幣 ¥)</div></div>
+        <input type="number" class="sii" id="s-cash" placeholder="50000">
+      </div>
+    </div>
+
+    <div class="ss">
+      <div class="ss-title">人員暱稱</div>
+      <div class="sr">
+        <div class="si">👨</div><div class="sinfo"><div class="sl">本人暱稱</div></div>
+        <input type="text" class="sii" id="s-me" placeholder="我" style="text-align:left">
+      </div>
+      <div class="sr">
+        <div class="si">👩</div><div class="sinfo"><div class="sl">老婆暱稱</div></div>
+        <input type="text" class="sii" id="s-wife" placeholder="老婆" style="text-align:left">
+      </div>
+    </div>
+
+    <div class="ss">
+      <div class="ss-title">API 設定</div>
+      <div class="sr" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="si">🤖</div>
+          <div class="sinfo"><div class="sl">Gemini API Key</div><div class="sd">AI 收據辨識用 — Google AI Studio 取得</div></div>
+        </div>
+        <input type="password" class="fi" id="s-gemini" placeholder="AIza...">
+      </div>
+      <div class="sr" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="si">📊</div>
+          <div class="sinfo"><div class="sl">Google Apps Script URL</div><div class="sd">Google Sheets 資料庫連線</div></div>
+        </div>
+        <input type="url" class="fi" id="s-gas" placeholder="https://script.google.com/macros/s/...">
+      </div>
+    </div>
+
+    <button class="btn btn-p" id="btn-save">儲存設定</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-s" id="btn-export">📤 匯出 JSON 備份</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-d" id="btn-clear">清除所有本機資料</button>
+    <div style="height:20px"></div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;line-height:1.6">版本 1.0 · 資料儲存在本機 localStorage<br>連結 Google Sheets 可跨裝置同步</p>
+  </section>
+
+  <!-- ═══════════════ BOTTOM NAV ═══════════════ -->
+  <nav id="bnav">
+    <button class="ni active" data-page="dashboard"><span class="nico">🏠</span><span class="nlbl">首頁</span></button>
+    <button class="ni" data-page="records"><span class="nico">📋</span><span class="nlbl">記錄</span></button>
+    <button class="ni" data-page="scanner"><span class="nico">📷</span><span class="nlbl">掃描</span></button>
+    <button class="ni" data-page="stats"><span class="nico">📊</span><span class="nlbl">統計</span></button>
+    <button class="ni" data-page="settings"><span class="nico">⚙️</span><span class="nlbl">設定</span></button>
+  </nav>
+
+  <!-- ═══════════════ FAB ═══════════════ -->
+  <button id="fab">＋</button>
+
+  <!-- ═══════════════ ADD MODAL ═══════════════ -->
+  <div class="mo" id="mo-add">
+    <div class="md">
+      <div class="md-handle"></div>
+      <div class="md-title">新增消費</div>
+
+      <div class="fg">
+        <label class="flbl">消費人</label>
+        <div class="ps">
+          <div class="po sel" data-p="me">
+            <div class="av me">👨</div><span class="pn" id="mo-me-lbl">我</span>
+          </div>
+          <div class="po" data-p="wife">
+            <div class="av wife">👩</div><span class="pn" id="mo-wife-lbl">老婆</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="flbl">消費類別</label>
+        <div class="cg" id="cat-grid"></div>
+      </div>
+
+      <div class="fg">
+        <label class="flbl">金額</label>
+        <div class="aw">
+          <div class="ct">
+            <button class="cb active" data-cur="JPY">¥ JPY</button>
+            <button class="cb" data-cur="TWD">$ TWD</button>
+          </div>
+          <input type="number" class="fi" id="inp-amt" placeholder="0" inputmode="decimal" style="flex:1">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="flbl">支付方式</label>
+        <div class="pg" id="pay-grid"></div>
+      </div>
+
+      <div class="fg">
+        <label class="flbl">店名（選填）</label>
+        <input type="text" class="fi" id="inp-merchant" placeholder="店名">
+      </div>
+
+      <div class="fg">
+        <label class="flbl">備註（選填）</label>
+        <textarea class="fi" id="inp-notes" placeholder="備註..."></textarea>
+      </div>
+
+      <button class="btn btn-p" id="btn-submit">新增記帳</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TOAST ═══════════════ -->
+  <div id="toast"></div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────
+const CATS = [
+  {id:'ticket',  ico:'🎫', lbl:'門票'},
+  {id:'transit', ico:'🚃', lbl:'電車/叫車'},
+  {id:'meal',    ico:'🍱', lbl:'三餐'},
+  {id:'snack',   ico:'🍡', lbl:'點心'},
+  {id:'drink',   ico:'🧋', lbl:'飲料'},
+  {id:'souvenir',ico:'🎁', lbl:'紀念品'},
+  {id:'jacket',  ico:'🧥', lbl:'外套'},
+  {id:'shoes',   ico:'👟', lbl:'鞋子'},
+  {id:'tops',    ico:'👕', lbl:'衣服'},
+  {id:'pants',   ico:'👖', lbl:'褲子'},
+  {id:'proxy',   ico:'🛍️', lbl:'代購'},
+  {id:'gift',    ico:'🎀', lbl:'伴手禮'},
+  {id:'flight',  ico:'✈️', lbl:'機票'},
+  {id:'hotel',   ico:'🏨', lbl:'住宿'},
+  {id:'other',   ico:'📌', lbl:'其他'},
+];
+const PAYS = [
+  {id:'cash', ico:'💴', lbl:'現金 (日幣)',  cls:'b-cash'},
+  {id:'card', ico:'💳', lbl:'信用卡',      cls:'b-card'},
+  {id:'ic',   ico:'🚇', lbl:'IC卡 (Suica)',cls:'b-ic'},
+  {id:'epay', ico:'📱', lbl:'電子支付',    cls:'b-epay'},
+];
+const CAT = Object.fromEntries(CATS.map(c=>[c.id,c]));
+const PAY = Object.fromEntries(PAYS.map(p=>[p.id,p]));
+const CHART_COLORS = ['#ff6b9d','#f093fb','#667eea','#6bcb77','#ffd166','#4ecdc4','#ff9f43','#a29bfe','#fd79a8','#00b894','#e17055','#74b9ff'];
+
+// ──────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────
+const S = {
+  exp: [],
+  cfg: {
+    rate:0.215, budget:0, cash:0,
+    start:'', end:'',
+    gemini:'', gas:'',
+    me:'我', wife:'老婆',
+  },
+  ui: { page:'dashboard', person:'me', cat:'meal', cur:'JPY', pay:'cash', filter:'all' },
+  charts: { daily:null, cat:null, pay:null },
+  scanData: null,
+  syncSt: 'idle',
+};
+
+// ──────────────────────────────────────────────
+// STORAGE
+// ──────────────────────────────────────────────
+function load() {
+  try {
+    const e=localStorage.getItem('tk_exp'); if(e) S.exp=JSON.parse(e);
+    const c=localStorage.getItem('tk_cfg'); if(c) S.cfg={...S.cfg,...JSON.parse(c)};
+  } catch(_){}
+}
+function saveExp(){ localStorage.setItem('tk_exp',JSON.stringify(S.exp)); }
+function saveCfg(){ localStorage.setItem('tk_cfg',JSON.stringify(S.cfg)); }
+
+// ──────────────────────────────────────────────
+// GAS API
+// ──────────────────────────────────────────────
+async function gasGet(action){
+  if(!S.cfg.gas) return null;
+  const url=new URL(S.cfg.gas);
+  url.searchParams.set('action',action);
+  const r=await fetch(url.toString(),{redirect:'follow'});
+  return r.json();
+}
+async function gasPost(data){
+  if(!S.cfg.gas) return null;
+  const r=await fetch(S.cfg.gas,{method:'POST',body:JSON.stringify(data),redirect:'follow'});
+  return r.json();
+}
+async function syncSheets(){
+  if(!S.cfg.gas){ toast('尚未設定 Apps Script URL'); return; }
+  setSyncSt('syncing');
+  try{
+    const d=await gasGet('getExpenses');
+    if(d&&d.expenses){ S.exp=d.expenses; saveExp(); setSyncSt('ok'); renderAll(); toast('已從 Google Sheets 同步 ✓'); }
+    else{ setSyncSt('ok'); toast('同步完成（無資料）'); }
+  }catch(e){ setSyncSt('err'); toast('同步失敗：'+e.message); }
+}
+async function pushExp(exp){
+  try{ await gasPost({action:'addExpense',expense:exp}); }catch(_){}
+}
+function setSyncSt(st){
+  S.syncSt=st;
+  const el=document.getElementById('sync-badge');
+  if(!el) return;
+  const m={idle:['','● 未連線'],syncing:['','⟳ 同步中…'],ok:['ok','✓ 已同步'],err:['err','✗ 連線錯誤']};
+  const[cls,txt]=m[st]||m.idle;
+  el.className='sbadge'+(cls?' '+cls:'');
+  el.textContent=txt;
+}
+
+// ──────────────────────────────────────────────
+// GEMINI AI
+// ──────────────────────────────────────────────
+async function scanReceipt(b64,mime){
+  const k=S.cfg.gemini;
+  if(!k){ toast('請先設定 Gemini API Key'); return null; }
+  const prompt=`分析這張日文收據圖片，回傳純 JSON（不加 markdown）：
+{
+  "merchant":"店名（繁體中文）",
+  "total": 總金額數字,
+  "currency":"JPY",
+  "tax_type":"稅別（如含稅10%）",
+  "items":[{"name":"品項繁體中文","price":價格,"qty":數量}],
+  "category_hint":"從以下選一個：ticket/transit/meal/snack/drink/souvenir/jacket/shoes/tops/pants/proxy/gift/flight/hotel/other"
+}
+無法辨識的欄位用 null，所有文字務必繁體中文。`;
+  const ep=`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${k}`;
+  const res=await fetch(ep,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}],
+      generationConfig:{temperature:0.1,maxOutputTokens:1024}
+    })
+  });
+  if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||'Gemini 錯誤'); }
+  const d=await res.json();
+  const raw=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+  const cleaned=raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+  return JSON.parse(cleaned);
+}
+
+// ──────────────────────────────────────────────
+// MATH HELPERS
+// ──────────────────────────────────────────────
+const r2t = jpy => Math.round(jpy*(S.cfg.rate||0.215));
+const t2r = twd => Math.round(twd/(S.cfg.rate||0.215));
+const toJpy = (a,cur) => cur==='JPY'?a:t2r(a);
+const toTwd = (a,cur) => cur==='TWD'?a:r2t(a);
+const fmt = n => Math.round(n).toLocaleString();
+const today = () => new Date().toISOString().split('T')[0];
+function fmtDate(ds){
+  const d=new Date(ds+'T00:00:00');
+  const wd=['日','一','二','三','四','五','六'];
+  return `${d.getMonth()+1}/${d.getDate()}（${wd[d.getDay()]}）`;
+}
+function tripDays(){
+  const {start,end}=S.cfg; if(!start||!end) return [];
+  const days=[]; let d=new Date(start+'T00:00:00'); const e2=new Date(end+'T00:00:00');
+  while(d<=e2){ days.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+  return days;
+}
+
+// ──────────────────────────────────────────────
+// EXPENSE CRUD
+// ──────────────────────────────────────────────
+function addExp(exp){ S.exp.unshift(exp); saveExp(); pushExp(exp); }
+function delExp(id){ S.exp=S.exp.filter(e=>e.id!==id); saveExp(); }
+const todayExp = () => S.exp.filter(e=>e.date===today());
+const totalJpy = () => S.exp.reduce((s,e)=>s+e.jpy,0);
+const cashJpy  = () => S.exp.filter(e=>e.pay==='cash').reduce((s,e)=>s+e.jpy,0);
+
+// ──────────────────────────────────────────────
+// RENDER
+// ──────────────────────────────────────────────
+function renderAll(){ renderDash(); renderRec(); renderStats(); renderCfg(); }
+
+/* ── Dashboard ── */
+function renderDash(){
+  const te=todayExp();
+  const tj=te.reduce((s,e)=>s+e.jpy,0);
+  const tj2=r2t(tj);
+  const totJ=totalJpy(), totT=r2t(totJ), cshJ=cashJpy();
+  const {budget,cash,start,end,me,wife}=S.cfg;
+  const t=today();
+
+  document.getElementById('dash-today-lbl').textContent=`今日 · ${fmtDate(t)}`;
+  if(start&&end) document.getElementById('dash-range').textContent=`${start} ～ ${end}`;
+  document.getElementById('dash-today-jpy').textContent=fmt(tj);
+  document.getElementById('dash-today-twd').textContent=fmt(tj2);
+  document.getElementById('dash-total-twd').textContent=fmt(totT);
+  document.getElementById('dash-budget-lbl').textContent=budget?`NT$${fmt(budget)}`:'--';
+  document.getElementById('dash-cash-jpy').textContent=fmt(cshJ);
+  document.getElementById('dash-cash-lbl').textContent=cash?`¥${fmt(cash)}`:'--';
+
+  // progress
+  function setProg(id,pct){
+    const el=document.getElementById(id);
+    el.style.width=Math.min(pct,100)+'%';
+    el.className='prog-fill '+(pct<60?'pf-ok':pct<85?'pf-warn':'pf-danger');
+  }
+  if(budget) setProg('prog-total',(totT/budget)*100);
+  if(cash)   setProg('prog-cash', (cshJ/cash)*100);
+
+  // persons
+  document.getElementById('me-lbl').textContent=me||'我';
+  document.getElementById('wife-lbl').textContent=wife||'老婆';
+  document.getElementById('mo-me-lbl').textContent=me||'我';
+  document.getElementById('mo-wife-lbl').textContent=wife||'老婆';
+  document.getElementById('me-tot').textContent=fmt(S.exp.filter(e=>e.person==='me').reduce((s,e)=>s+e.jpy,0));
+  document.getElementById('wife-tot').textContent=fmt(S.exp.filter(e=>e.person==='wife').reduce((s,e)=>s+e.jpy,0));
+
+  // recent
+  const el=document.getElementById('recent-list');
+  const rec=S.exp.slice(0,5);
+  el.innerHTML=rec.length?rec.map(expHTML).join(''):`<div class="empty"><div class="eico">🌸</div><p>還沒有消費記錄<br>點擊 + 新增第一筆！</p></div>`;
+  el.querySelectorAll('.ei[data-id]').forEach(x=>x.addEventListener('click',()=>expDetail(x.dataset.id)));
+}
+
+function expHTML(e){
+  const c=CAT[e.cat]||CAT.other, p=PAY[e.pay]||PAY.cash;
+  return `<div class="ei" data-id="${e.id}">
+    <div class="ei-icon">${c.ico}</div>
+    <div class="ei-info">
+      <div class="ei-merchant">${e.merchant||c.lbl}</div>
+      <div class="ei-meta">${c.lbl} · ${p.ico} · ${e.date.slice(5)}</div>
+    </div>
+    <div class="ei-av ${e.person}">${e.person==='me'?'👨':'👩'}</div>
+    <div class="ei-amt">
+      <div class="ei-jpy">¥${fmt(e.jpy)}</div>
+      <div class="ei-twd">≈NT$${fmt(r2t(e.jpy))}</div>
+    </div>
+  </div>`;
+}
+
+/* ── Records ── */
+function renderRec(){
+  const f=S.ui.filter;
+  let exps=[...S.exp];
+  if(f==='me')   exps=exps.filter(e=>e.person==='me');
+  if(f==='wife') exps=exps.filter(e=>e.person==='wife');
+  if(f==='cash') exps=exps.filter(e=>e.pay==='cash');
+  if(f==='card') exps=exps.filter(e=>e.pay==='card');
+
+  const el=document.getElementById('records-list');
+  if(!exps.length){ el.innerHTML=`<div class="empty"><div class="eico">📋</div><p>目前沒有記錄</p></div>`; return; }
+
+  const grp={};
+  exps.forEach(e=>{ if(!grp[e.date]) grp[e.date]=[]; grp[e.date].push(e); });
+
+  el.innerHTML=Object.keys(grp).sort((a,b)=>b.localeCompare(a)).map(date=>{
+    const dayJ=grp[date].reduce((s,e)=>s+e.jpy,0);
+    return `<div class="dgh"><span>${fmtDate(date)}</span><span>¥${fmt(dayJ)}</span></div>
+    <div class="card" style="padding:0 16px;margin-bottom:12px">${grp[date].map(expHTML).join('')}</div>`;
+  }).join('');
+
+  el.querySelectorAll('.ei[data-id]').forEach(x=>x.addEventListener('click',()=>expDetail(x.dataset.id)));
+}
+
+/* ── Stats ── */
+function renderStats(){
+  const exps=S.exp;
+  if(!exps.length) return;
+
+  // Daily
+  const days=tripDays();
+  const activeDays=[...new Set(exps.map(e=>e.date))].sort();
+  const cdays=days.length?days:activeDays;
+  const ddata=cdays.map(d=>({d,v:exps.filter(e=>e.date===d).reduce((s,e)=>s+e.jpy,0)}));
+
+  if(S.charts.daily) S.charts.daily.destroy();
+  S.charts.daily=new Chart(document.getElementById('chart-daily'),{
+    type:'bar',
+    data:{
+      labels:ddata.map(x=>x.d.slice(5)),
+      datasets:[{
+        label:'日消費 (¥)',data:ddata.map(x=>x.v),
+        backgroundColor:'rgba(255,107,157,.55)',borderColor:'#ff6b9d',
+        borderWidth:2,borderRadius:7,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#7777aa',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#7777aa',font:{size:11}},grid:{color:'rgba(255,255,255,.05)'}}
+      }
+    }
+  });
+
+  // Category
+  const ctot={};
+  exps.forEach(e=>{ ctot[e.cat]=(ctot[e.cat]||0)+e.jpy; });
+  const cents=Object.entries(ctot).sort((a,b)=>b[1]-a[1]);
+  if(S.charts.cat) S.charts.cat.destroy();
+  S.charts.cat=new Chart(document.getElementById('chart-cat'),{
+    type:'doughnut',
+    data:{
+      labels:cents.map(([k])=>(CAT[k]?.ico||'')+' '+(CAT[k]?.lbl||k)),
+      datasets:[{data:cents.map(([,v])=>v),backgroundColor:CHART_COLORS,borderWidth:0}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'65%'}
+  });
+
+  // Payment
+  const ptot={};
+  exps.forEach(e=>{ ptot[e.pay]=(ptot[e.pay]||0)+e.jpy; });
+  const pents=Object.entries(ptot).sort((a,b)=>b[1]-a[1]);
+  if(S.charts.pay) S.charts.pay.destroy();
+  S.charts.pay=new Chart(document.getElementById('chart-pay'),{
+    type:'doughnut',
+    data:{
+      labels:pents.map(([k])=>(PAY[k]?.ico||'')+' '+(PAY[k]?.lbl||k)),
+      datasets:[{data:pents.map(([,v])=>v),backgroundColor:['#6bcb77','#667eea','#ff9f43','#f093fb'],borderWidth:0}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'65%'}
+  });
+
+  // Top 10
+  const sorted=[...exps].sort((a,b)=>b.jpy-a.jpy).slice(0,10);
+  const rnk=['gold','silver','bronze'];
+  document.getElementById('top10').innerHTML=sorted.map((e,i)=>{
+    const c=CAT[e.cat]||CAT.other;
+    return `<div class="t10-item">
+      <div class="t10-rank ${rnk[i]||''}">${i+1}</div>
+      <div style="font-size:20px">${c.ico}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.merchant||c.lbl}</div>
+        <div style="font-size:11px;color:var(--muted)">${e.date.slice(5)} · ${c.lbl}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:15px;font-weight:700">¥${fmt(e.jpy)}</div>
+        <div style="font-size:11px;color:var(--muted)">NT$${fmt(r2t(e.jpy))}</div>
+      </div>
+    </div>`;
+  }).join('')||`<div class="empty" style="padding:20px"><p>沒有資料</p></div>`;
+}
+
+/* ── Settings ── */
+function renderCfg(){
+  const c=S.cfg;
+  const sv=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
+  sv('s-start',c.start); sv('s-end',c.end); sv('s-rate',c.rate);
+  sv('s-budget',c.budget); sv('s-cash',c.cash);
+  sv('s-gemini',c.gemini); sv('s-gas',c.gas);
+  sv('s-me',c.me); sv('s-wife',c.wife);
+  setSyncSt(c.gas?S.syncSt:'idle');
+}
+
+// ──────────────────────────────────────────────
+// MODAL
+// ──────────────────────────────────────────────
+function openModal(pre={}){
+  S.ui.person=pre.person||'me';
+  S.ui.cat=pre.cat||'meal';
+  S.ui.cur=pre.cur||'JPY';
+  S.ui.pay=pre.pay||'cash';
+  document.getElementById('inp-amt').value=pre.amount||'';
+  document.getElementById('inp-merchant').value=pre.merchant||'';
+  document.getElementById('inp-notes').value=pre.notes||'';
+  buildModalGrids();
+  document.getElementById('mo-add').classList.add('open');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>document.getElementById('inp-amt').focus(),350);
+}
+function closeModal(){
+  document.getElementById('mo-add').classList.remove('open');
+  document.body.style.overflow='';
+}
+function buildModalGrids(){
+  // person
+  document.querySelectorAll('.po').forEach(el=>el.classList.toggle('sel',el.dataset.p===S.ui.person));
+
+  // categories
+  const cg=document.getElementById('cat-grid');
+  cg.innerHTML=CATS.map(c=>`<div class="co ${c.id===S.ui.cat?'sel':''}" data-cat="${c.id}">
+    <span class="ci">${c.ico}</span><span class="cl">${c.lbl}</span>
+  </div>`).join('');
+  cg.querySelectorAll('.co').forEach(el=>el.addEventListener('click',()=>{
+    S.ui.cat=el.dataset.cat;
+    cg.querySelectorAll('.co').forEach(x=>x.classList.remove('sel'));
+    el.classList.add('sel');
+  }));
+
+  // currency
+  document.querySelectorAll('.cb').forEach(el=>el.classList.toggle('active',el.dataset.cur===S.ui.cur));
+
+  // payment
+  const pg=document.getElementById('pay-grid');
+  pg.innerHTML=PAYS.map(p=>`<div class="pp ${p.id===S.ui.pay?'sel':''}" data-pay="${p.id}">
+    <span>${p.ico}</span>${p.lbl}
+  </div>`).join('');
+  pg.querySelectorAll('.pp').forEach(el=>el.addEventListener('click',()=>{
+    S.ui.pay=el.dataset.pay;
+    pg.querySelectorAll('.pp').forEach(x=>x.classList.remove('sel'));
+    el.classList.add('sel');
+  }));
+}
+
+function submitExp(){
+  const amt=parseFloat(document.getElementById('inp-amt').value);
+  if(!amt||amt<=0){ toast('請輸入金額'); return; }
+  const exp={
+    id:Date.now().toString(),
+    date:today(),
+    time:new Date().toTimeString().slice(0,5),
+    person:S.ui.person,
+    cat:S.ui.cat,
+    pay:S.ui.pay,
+    jpy:toJpy(amt,S.ui.cur),
+    twd:toTwd(amt,S.ui.cur),
+    merchant:document.getElementById('inp-merchant').value.trim(),
+    notes:document.getElementById('inp-notes').value.trim(),
+    src:'manual',
+  };
+  addExp(exp); closeModal(); renderAll(); toast('已新增記帳 ✓');
+}
+
+// ──────────────────────────────────────────────
+// EXPENSE DETAIL / DELETE
+// ──────────────────────────────────────────────
+function expDetail(id){
+  const e=S.exp.find(x=>x.id===id); if(!e) return;
+  const c=CAT[e.cat]||CAT.other, p=PAY[e.pay]||PAY.cash;
+  const lines=[
+    `${c.ico} ${e.merchant||c.lbl}`,
+    `¥${fmt(e.jpy)}  (NT$${fmt(r2t(e.jpy))})`,
+    `${e.date} ${e.time} · ${p.lbl}`,
+    e.notes?`備註: ${e.notes}`:'',
+  ].filter(Boolean).join('\n');
+  if(confirm(lines+'\n\n點確定刪除此筆記錄')){ delExp(id); renderAll(); toast('已刪除'); }
+}
+
+// ──────────────────────────────────────────────
+// SCANNER
+// ──────────────────────────────────────────────
+function setupScanner(){
+  const zone=document.getElementById('scan-zone');
+  const input=document.getElementById('scan-input');
+  const img=document.getElementById('scan-img');
+
+  zone.addEventListener('click',()=>{
+    if(!S.cfg.gemini){ document.getElementById('scan-warn').style.display='block'; return; }
+    document.getElementById('scan-warn').style.display='none';
+    input.click();
+  });
+  input.addEventListener('change',e=>{ if(e.target.files[0]) doScan(e.target.files[0]); });
+
+  zone.addEventListener('dragover',e=>{ e.preventDefault(); zone.classList.add('dv'); });
+  zone.addEventListener('dragleave',()=>zone.classList.remove('dv'));
+  zone.addEventListener('drop',e=>{ e.preventDefault(); zone.classList.remove('dv'); if(e.dataTransfer.files[0]) doScan(e.dataTransfer.files[0]); });
+
+  document.getElementById('btn-rescan').addEventListener('click',()=>{
+    document.getElementById('scan-result').style.display='none';
+    img.style.display='none'; img.src='';
+    zone.style.display='block';
+    S.scanData=null; input.value='';
+  });
+  document.getElementById('btn-use-result').addEventListener('click',()=>{
+    if(!S.scanData) return;
+    openModal({
+      amount:S.scanData.total,cur:'JPY',
+      merchant:S.scanData.merchant||'',
+      cat:S.scanData.category_hint||'meal',
+      notes:S.scanData.items?.map(i=>`${i.name}×${i.qty||1}`).join(', ')||'',
+    });
+  });
+}
+
+async function doScan(file){
+  const zone=document.getElementById('scan-zone');
+  const img=document.getElementById('scan-img');
+  const load=document.getElementById('scan-loading');
+  const res=document.getElementById('scan-result');
+  document.getElementById('scan-warn').style.display='none';
+
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    img.src=ev.target.result; img.style.display='block';
+    zone.style.display='none'; res.style.display='none'; load.style.display='block';
+    try{
+      const b64=ev.target.result.split(',')[1];
+      const d=await scanReceipt(b64,file.type||'image/jpeg');
+      S.scanData=d; load.style.display='none';
+      if(d){ renderScanResult(d); res.style.display='block'; }
+    }catch(err){
+      load.style.display='none';
+      toast('辨識失敗：'+err.message);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderScanResult(d){
+  const items=d.items?.map(i=>`${i.name} × ${i.qty||1} ¥${i.price||0}`).join('<br>')||'--';
+  document.getElementById('air-content').innerHTML=`
+    <div class="aii"><span class="ak">店名</span><span class="av2">${d.merchant||'--'}</span></div>
+    <div class="aii"><span class="ak">總金額</span><span class="av2">¥${d.total||0}</span></div>
+    <div class="aii"><span class="ak">稅別</span><span class="av2">${d.tax_type||'--'}</span></div>
+    <div class="aii"><span class="ak">品項</span><span class="av2">${items}</span></div>
+  `;
+}
+
+// ──────────────────────────────────────────────
+// NAVIGATION
+// ──────────────────────────────────────────────
+function nav(page){
+  S.ui.page=page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.ni').forEach(n=>n.classList.toggle('active',n.dataset.page===page));
+  document.getElementById('fab').style.display=['dashboard','records'].includes(page)?'flex':'none';
+  if(page==='stats')   renderStats();
+  if(page==='records') renderRec();
+  if(page==='settings') renderCfg();
+}
+
+// ──────────────────────────────────────────────
+// TOAST
+// ──────────────────────────────────────────────
+let _tt;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),2600);
+}
+
+// ──────────────────────────────────────────────
+// SAVE SETTINGS
+// ──────────────────────────────────────────────
+function saveSettings(){
+  S.cfg={
+    rate:  parseFloat(document.getElementById('s-rate').value)||0.215,
+    budget:parseFloat(document.getElementById('s-budget').value)||0,
+    cash:  parseFloat(document.getElementById('s-cash').value)||0,
+    start: document.getElementById('s-start').value,
+    end:   document.getElementById('s-end').value,
+    gemini:document.getElementById('s-gemini').value.trim(),
+    gas:   document.getElementById('s-gas').value.trim(),
+    me:    document.getElementById('s-me').value.trim()||'我',
+    wife:  document.getElementById('s-wife').value.trim()||'老婆',
+  };
+  saveCfg(); renderAll(); toast('設定已儲存 ✓');
+}
+
+// ──────────────────────────────────────────────
+// EXPORT
+// ──────────────────────────────────────────────
+function exportJSON(){
+  const blob=new Blob([JSON.stringify({expenses:S.exp,settings:S.cfg,at:new Date().toISOString()},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`tokyo-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ──────────────────────────────────────────────
+// EVENT LISTENERS
+// ──────────────────────────────────────────────
+function bind(){
+  // nav
+  document.querySelectorAll('.ni').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.page)));
+  // fab
+  document.getElementById('fab').addEventListener('click',()=>openModal());
+  // modal close on overlay click
+  document.getElementById('mo-add').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(); });
+  // person selector
+  document.querySelectorAll('.po').forEach(el=>el.addEventListener('click',()=>{
+    S.ui.person=el.dataset.p;
+    document.querySelectorAll('.po').forEach(x=>x.classList.remove('sel'));
+    el.classList.add('sel');
+  }));
+  // currency toggle
+  document.querySelectorAll('.cb').forEach(b=>b.addEventListener('click',()=>{
+    S.ui.cur=b.dataset.cur;
+    document.querySelectorAll('.cb').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+  }));
+  // submit
+  document.getElementById('btn-submit').addEventListener('click',submitExp);
+  // enter to submit amount
+  document.getElementById('inp-amt').addEventListener('keydown',e=>{ if(e.key==='Enter') submitExp(); });
+  // records filter
+  document.querySelectorAll('.fc').forEach(c=>c.addEventListener('click',()=>{
+    S.ui.filter=c.dataset.f;
+    document.querySelectorAll('.fc').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
+    renderRec();
+  }));
+  // settings
+  document.getElementById('btn-save').addEventListener('click',saveSettings);
+  document.getElementById('btn-sync').addEventListener('click',syncSheets);
+  document.getElementById('btn-export').addEventListener('click',exportJSON);
+  document.getElementById('btn-clear').addEventListener('click',()=>{
+    if(confirm('確定清除所有本機資料？此操作無法復原。')){
+      localStorage.removeItem('tk_exp'); S.exp=[]; renderAll(); toast('已清除');
+    }
+  });
+}
+
+// ──────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────
+function init(){
+  load(); bind(); setupScanner(); renderAll();
+  if(S.cfg.gas) syncSheets();
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
