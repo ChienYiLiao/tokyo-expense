@@ -495,17 +495,22 @@ async function gasGet(action){
 }
 async function gasPost(data){
   if(!S.cfg.gas) return null;
-  // GAS Web App returns a 302 redirect; browsers convert POST→GET on 302, causing doGet to run
-  // instead of doPost. Fix: use mode:'no-cors' so the POST truly reaches doPost.
-  // Trade-off: opaque response (can't read body), so we synthesize the result locally.
-  await fetch(S.cfg.gas,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(data),
-    mode:'no-cors'
-  });
-  // Synthesize result since we can't read the opaque response
-  return {ok:true, added:(data.expenses||[]).length||(data.expense?1:0)};
+  // GAS Web App 302 redirect converts POST→GET in browsers (no-cors doesn't help either).
+  // Real fix: send write ops as GET with payload in URL params; GAS doGet detects 'payload' and writes.
+  const url=new URL(S.cfg.gas);
+  url.searchParams.set('payload',JSON.stringify(data));
+  return (await fetch(url.toString(),{redirect:'follow'})).json();
+}
+
+// For large batches: chunk to stay within URL length limits (~15 per request)
+async function gasPostBatch(action,expenses){
+  if(!S.cfg.gas) return {ok:true,added:0};
+  const CHUNK=15; let totalAdded=0;
+  for(let i=0;i<expenses.length;i+=CHUNK){
+    const r=await gasPost({action,expenses:expenses.slice(i,i+CHUNK)});
+    totalAdded+=(r?.added||0);
+  }
+  return {ok:true,added:totalAdded};
 }
 
 // ↑ 推送：本機 → Sheets（GAS 會跳過已存在的 ID，不重複）
@@ -513,8 +518,8 @@ async function pushToSheets(){
   if(!S.cfg.gas){toast('尚未設定 Apps Script URL');return;}
   setSyncSt('syncing');
   try{
-    await gasPost({action:'batchAddExpenses',expenses:S.exp});
-    setSyncSt('ok'); toast(`推送 ${S.exp.length} 筆至 Sheets（GAS 端會自動去重）✓`);
+    const r=await gasPostBatch('batchAddExpenses',S.exp);
+    setSyncSt('ok'); toast(`推送完成，新增 ${r.added} 筆 ✓`);
   }catch(e){setSyncSt('err');toast('推送失敗：'+e.message);}
 }
 // ↓ 同步：Sheets → 本機（LOCAL 優先：本機有的 ID 不被 Sheets 覆蓋）
@@ -1049,7 +1054,8 @@ function bind(){
     if(!confirm('這會清除 Google Sheets 中的所有記錄，並將本機資料重新推送。\n確定繼續？')) return;
     setSyncSt('syncing');
     try{
-      await gasPost({action:'clearAndRebuild',expenses:S.exp});
+      await gasPost({action:'clearExpenses'});
+      await gasPostBatch('batchAddExpenses',S.exp);
       setSyncSt('ok'); toast(`已重建 Sheets，共 ${S.exp.length} 筆 ✓`);
     }catch(e){setSyncSt('err');toast('失敗：'+e.message);}
   });
